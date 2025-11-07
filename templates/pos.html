@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smart Retail POS - Cashier</title>
+  <script src="https://cdn.webix.com/edge/webix.js"></script>
+  <link rel="stylesheet" href="https://cdn.webix.com/edge/webix.css">
+  <script src="assets/js/auth.js"></script>
+</head>
+<body>
+  <script>
+    webix.ready(function() {
+      ensureAuthenticated();
+      const user = getCurrentUser();
+
+      webix.ui({
+        rows: [
+          {
+            view: "toolbar",
+            elements: [
+              { view: "label", label: "Smart Retail POS - Cashier" },
+              {},
+              { view: "label", label: `Cashier: ${user.username}` },
+              { view: "button", value: "Logout", width: 80, click: logout }
+            ]
+          },
+          {
+            cols: [
+              {
+                rows: [
+                  {
+                    view: "template",
+                    template: "<h3 style='text-align:center; margin:10px;'>Products</h3>",
+                    height: 40
+                  },
+                  {
+                    view: "text",
+                    id: "productSearch",
+                    placeholder: "Search products...",
+                    on: {
+                      onTimedKeyPress: function() {
+                        filterProducts(this.getValue());
+                      }
+                    }
+                  },
+                  {
+                    view: "list",
+                    id: "productsList",
+                    template: "<div style='padding:10px; border-bottom:1px solid #ccc;'><strong>#name#</strong><br>Price: $#price# | Stock: #stock#</div>",
+                    type: {
+                      height: 60
+                    },
+                    select: true,
+                    on: {
+                      onItemClick: function(id) {
+                        addToCart(this.getItem(id));
+                      }
+                    }
+                  }
+                ],
+                width: 350
+              },
+              {
+                rows: [
+                  {
+                    view: "template", 
+                    template: "<h3 style='text-align:center; margin:10px;'>Shopping Cart</h3>",
+                    height: 40
+                  },
+                  {
+                    view: "datatable",
+                    id: "cartTable",
+                    columns: [
+                      { id: "name", header: "Product", width: 200 },
+                      { id: "price", header: "Price", width: 80, format: webix.i18n.priceFormat },
+                      { id: "quantity", header: "Qty", width: 60, editor: "text" },
+                      { id: "subtotal", header: "Subtotal", width: 100, format: webix.i18n.priceFormat },
+                      { id: "remove", header: "", width: 50, template: "<button class='webix_button webix_danger' onclick='removeFromCart(\"#id#\")'>×</button>" }
+                    ],
+                    editable: true,
+                    on: {
+                      onAfterEditStop: function(state, editor) {
+                        if (editor.column === "quantity") {
+                          updateCartItem(state.row, parseInt(state.value) || 1);
+                        }
+                      }
+                    }
+                  },
+                  {
+                    rows: [
+                      {
+                        view: "template",
+                        id: "totalTemplate",
+                        template: "<div style='text-align:right; padding:15px; font-size:18px; font-weight:bold;'>Total: $0.00</div>",
+                        height: 50
+                      },
+                      {
+                        cols: [
+                          { view: "text", id: "customerName", placeholder: "Customer Name (Optional)" },
+                          {
+                            view: "combo",
+                            id: "paymentMethod",
+                            label: "Payment",
+                            value: "cash",
+                            options: [
+                              { id: "cash", value: "Cash" },
+                              { id: "card", value: "Card" },
+                              { id: "digital", value: "Digital" }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        cols: [
+                          { view: "button", value: "Clear Cart", click: clearCart },
+                          { view: "button", value: "Process Payment", css: "webix_primary", click: processPayment }
+                        ]
+                      }
+                    ],
+                    height: 150
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      });
+
+      loadProducts();
+    });
+
+    let cart = [];
+    let cartTotal = 0;
+
+    function loadProducts() {
+      fetch("/api/products/", {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("jwt") }
+      })
+      .then(res => res.json())
+      .then(data => {
+        $$("productsList").parse(data);
+      });
+    }
+
+    function filterProducts(search) {
+      $$("productsList").filter(function(obj) {
+        return obj.name.toLowerCase().indexOf(search.toLowerCase()) !== -1;
+      });
+    }
+
+    function addToCart(product) {
+      if (product.stock <= 0) {
+        webix.message({ type: "error", text: "Product out of stock" });
+        return;
+      }
+
+      const existingItem = cart.find(item => item.product_id === product.product_id);
+      
+      if (existingItem) {
+        if (existingItem.quantity >= product.stock) {
+          webix.message({ type: "error", text: "Cannot add more than available stock" });
+          return;
+        }
+        existingItem.quantity += 1;
+        existingItem.subtotal = existingItem.price * existingItem.quantity;
+      } else {
+        cart.push({
+          id: product.product_id,
+          product_id: product.product_id,
+          name: product.name,
+          price: product.price,
+          quantity: 1,
+          subtotal: product.price,
+          max_stock: product.stock
+        });
+      }
+
+      updateCartDisplay();
+    }
+
+    function updateCartItem(itemId, newQuantity) {
+      const item = cart.find(i => i.id === itemId);
+      if (item) {
+        if (newQuantity > item.max_stock) {
+          webix.message({ type: "error", text: "Cannot exceed available stock" });
+          newQuantity = item.max_stock;
+        }
+        if (newQuantity <= 0) {
+          removeFromCart(itemId);
+          return;
+        }
+        item.quantity = newQuantity;
+        item.subtotal = item.price * item.quantity;
+        updateCartDisplay();
+      }
+    }
+
+    function removeFromCart(itemId) {
+      cart = cart.filter(item => item.id !== itemId);
+      updateCartDisplay();
+    }
+
+    function updateCartDisplay() {
+      $$("cartTable").clearAll();
+      $$("cartTable").parse(cart);
+      
+      cartTotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
+      $$("totalTemplate").setHTML(`<div style='text-align:right; padding:15px; font-size:18px; font-weight:bold;'>Total: $${cartTotal.toFixed(2)}</div>`);
+    }
+
+    function clearCart() {
+      cart = [];
+      updateCartDisplay();
+    }
+
+    function processPayment() {
+      if (cart.length === 0) {
+        webix.message({ type: "error", text: "Cart is empty" });
+        return;
+      }
+
+      const transactionData = {
+        items: cart.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity
+        })),
+        customer_name: $$("customerName").getValue(),
+        payment_method: $$("paymentMethod").getValue()
+      };
+
+      fetch("/api/sales/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + localStorage.getItem("jwt")
+        },
+        body: JSON.stringify(transactionData)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.errors) {
+          webix.message({ type: "error", text: data.errors.join(", ") });
+        } else {
+          webix.message({ type: "success", text: `Transaction completed! Total: $${data.total_amount.toFixed(2)}` });
+          clearCart();
+          $$("customerName").setValue("");
+          loadProducts(); // Refresh to update stock
+        }
+      })
+      .catch(err => {
+        webix.message({ type: "error", text: "Transaction failed" });
+      });
+    }
+  </script>
+</body>
+</html>

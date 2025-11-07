@@ -1,0 +1,9 @@
+flask
+pymongo
+pyjwt
+Werkzeug
+flask-cors
+dotenv
+python-dotenv
+gunicorn
+eventlet

@@ -1,0 +1,36 @@
+steps:
+  # Step 1: Build the container
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'asia-southeast2-docker.pkg.dev/sat-kapita-selekta-b/ks-2025-1/672023205:${SHORT_SHA}',
+        '.'
+      ]
+
+  # Step 2: Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      ['push', 'asia-southeast2-docker.pkg.dev/sat-kapita-selekta-b/ks-2025-1/672023205:${SHORT_SHA}']
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      [
+        'run',
+        'deploy',
+        'giska-672023205',
+        '--image',
+        'asia-southeast2-docker.pkg.dev/sat-kapita-selekta-b/ks-2025-1/672023205:${SHORT_SHA}',
+        '--region',
+        'asia-southeast2',
+        '--platform',
+        'managed',
+        '--allow-unauthenticated',
+        '--port',
+        '8080'
+      ]
+
+images:
+  - 'asia-southeast2-docker.pkg.dev/sat-kapita-selekta-b/ks-2025-1/672023205:${SHORT_SHA}'

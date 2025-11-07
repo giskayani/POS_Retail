@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smart Retail POS - Dashboard</title>
+  <script src="https://cdn.webix.com/edge/webix.js"></script>
+  <link rel="stylesheet" href="https://cdn.webix.com/edge/webix.css">
+  <script src="assets/js/auth.js"></script>
+</head>
+<body>
+  <script>
+    webix.ready(function() {
+      ensureAuthenticated();
+      const user = getCurrentUser();
+      
+      if (user.role !== "admin") {
+        window.location.href = "/pos.html";
+        return;
+      }
+
+      webix.ui({
+        rows: [
+          {
+            view: "toolbar",
+            elements: [
+              { view: "label", label: "Smart Retail POS - Admin Dashboard" },
+              {},
+              { view: "label", label: `Welcome, ${user.username}` },
+              { view: "button", value: "Logout", width: 80, click: logout }
+            ]
+          },
+          {
+            cols: [
+              {
+                view: "sidebar",
+                width: 200,
+                data: [
+                  { id: "dashboard", value: "Dashboard", icon: "wxi-columns" },
+                  { id: "products", value: "Products", icon: "wxi-package" },
+                  { id: "sales", value: "Sales", icon: "wxi-chart" },
+                  { id: "analytics", value: "Analytics", icon: "wxi-line-chart" }
+                ],
+                on: {
+                  onAfterSelect: function(id) {
+                    showContent(id);
+                  }
+                }
+              },
+              {
+                id: "content",
+                rows: [
+                  getDashboardContent()
+                ]
+              }
+            ]
+          }
+        ]
+      });
+
+      loadDashboardStats();
+    });
+
+    function getDashboardContent() {
+      return {
+        rows: [
+          {
+            cols: [
+              {
+                view: "template",
+                template: "<div style='text-align:center; padding:20px;'><h3>Today's Sales</h3><h2 id='todaySales'>$0</h2></div>",
+                css: "webix_primary"
+              },
+              {
+                view: "template", 
+                template: "<div style='text-align:center; padding:20px;'><h3>Transactions</h3><h2 id='todayTransactions'>0</h2></div>",
+                css: "webix_secondary"
+              },
+              {
+                view: "template",
+                template: "<div style='text-align:center; padding:20px;'><h3>Products</h3><h2 id='totalProducts'>0</h2></div>",
+                css: "webix_success"
+              },
+              {
+                view: "template",
+                template: "<div style='text-align:center; padding:20px;'><h3>Low Stock</h3><h2 id='lowStock'>0</h2></div>",
+                css: "webix_danger"
+              }
+            ],
+            height: 120
+          },
+          {
+            cols: [
+              {
+                view: "chart",
+                id: "dailyChart",
+                type: "line",
+                value: "#total_sales#",
+                xAxis: { template: "#date#" },
+                yAxis: {},
+                legend: { values: [{ text: "Sales", color: "#36abee" }] }
+              },
+              {
+                view: "chart",
+                id: "bestSellersChart", 
+                type: "bar",
+                value: "#total_quantity#",
+                xAxis: { template: "#product_name#" },
+                yAxis: {},
+                legend: { values: [{ text: "Quantity Sold", color: "#ee9336" }] }
+              }
+            ]
+          }
+        ]
+      };
+    }
+
+    function getProductsContent() {
+      return {
+        rows: [
+          {
+            view: "toolbar",
+            elements: [
+              { view: "label", label: "Product Management" },
+              {},
+              { view: "button", value: "Add Product", css: "webix_primary", click: showAddProductForm }
+            ]
+          },
+          {
+            view: "datatable",
+            id: "productsTable",
+            columns: [
+              { id: "name", header: "Name", width: 200, sort: "string" },
+              { id: "category", header: "Category", width: 150 },
+              { id: "price", header: "Price", width: 100, format: webix.i18n.priceFormat },
+              { id: "stock", header: "Stock", width: 80 },
+              { id: "sku", header: "SKU", width: 120 },
+              { id: "actions", header: "Actions", width: 150, template: "<button class='webix_button' onclick='editProduct(\"#product_id#\")'>Edit</button> <button class='webix_button webix_danger' onclick='deleteProduct(\"#product_id#\")'>Delete</button>" }
+            ],
+            autoheight: true,
+            select: true
+          }
+        ]
+      };
+    }
+
+    function showContent(id) {
+      const content = $$("content");
+      
+      switch(id) {
+        case "dashboard":
+          content.removeView(content.getChildViews()[0]);
+          content.addView(getDashboardContent());
+          loadDashboardStats();
+          break;
+        case "products":
+          content.removeView(content.getChildViews()[0]);
+          content.addView(getProductsContent());
+          loadProducts();
+          break;
+        case "sales":
+          content.removeView(content.getChildViews()[0]);
+          content.addView(getSalesContent());
+          loadSales();
+          break;
+        case "analytics":
+          content.removeView(content.getChildViews()[0]);
+          content.addView(getAnalyticsContent());
+          loadAnalytics();
+          break;
+      }
+    }
+
+    function loadDashboardStats() {
+      fetch("/api/dashboard/stats", {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("jwt") }
+      })
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("todaySales").textContent = "$" + data.today_sales.toFixed(2);
+        document.getElementById("todayTransactions").textContent = data.today_transactions;
+        document.getElementById("totalProducts").textContent = data.total_products;
+        document.getElementById("lowStock").textContent = data.low_stock_products;
+      });
+
+      // Load charts
+      loadDailyChart();
+      loadBestSellersChart();
+    }
+
+    function loadDailyChart() {
+      fetch("/api/sales/analytics/daily?days=7", {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("jwt") }
+      })
+      .then(res => res.json())
+      .then(data => {
+        const chartData = data.map(item => ({
+          date: item._id,
+          total_sales: item.total_sales
+        }));
+        $$("dailyChart").parse(chartData);
+      });
+    }
+
+    function loadBestSellersChart() {
+      fetch("/api/sales/analytics/bestsellers?limit=5", {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("jwt") }
+      })
+      .then(res => res.json())
+      .then(data => {
+        $$("bestSellersChart").parse(data);
+      });
+    }
+
+    function loadProducts() {
+      fetch("/api/products/", {
+        headers: { "Authorization": "Bearer " + localStorage.getItem("jwt") }
+      })
+      .then(res => res.json())
+      .then(data => {
+        $$("productsTable").parse(data);
+      });
+    }
+
+    function showAddProductForm() {
+      webix.ui({
+        view: "window",
+        id: "productWindow",
+        width: 400,
+        position: "center",
+        head: "Add Product",
+        body: {
+          view: "form",
+          id: "productForm",
+          elements: [
+            { view: "text", name: "name", label: "Name", required: true },
+            { view: "text", name: "category", label: "Category" },
+            { view: "text", name: "price", label: "Price", required: true },
+            { view: "text", name: "stock", label: "Stock", required: true },
+            { view: "text", name: "sku", label: "SKU" },
+            {
+              cols: [
+                { view: "button", value: "Save", css: "webix_primary", click: saveProduct },
+                { view: "button", value: "Cancel", click: function() { $$("productWindow").close(); } }
+              ]
+            }
+          ]
+        }
+      }).show();
+    }
+
+    function saveProduct() {
+      const form = $$("productForm");
+      if (!form.validate()) return;
+
+      const data = form.getValues();
+      
+      fetch("/api/products/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + localStorage.getItem("jwt")
+        },
+        body: JSON.stringify(data)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.errors) {
+          webix.message({ type: "error", text: data.errors.join(", ") });
+        } else {
+          webix.message({ type: "success", text: "Product added successfully" });
+          $$("productWindow").close();
+          loadProducts();
+        }
+      });
+    }
+
+    function editProduct(productId) {
+      // Implementation for edit product
+      webix.message("Edit product: " + productId);
+    }
+
+    function deleteProduct(productId) {
+      webix.confirm("Are you sure you want to delete this product?")
+      .then(() => {
+        fetch(`/api/products/${productId}`, {
+          method: "DELETE",
+          headers: { "Authorization": "Bearer " + localStorage.getItem("jwt") }
+        })
+        .then(res => res.json())
+        .then(data => {
+          webix.message({ type: "success", text: "Product deleted successfully" });
+          loadProducts();
+        });
+      });
+    }
+  </script>
+</body>
+</html>

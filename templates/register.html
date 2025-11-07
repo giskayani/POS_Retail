@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smart Retail POS - Register</title>
+  <script src="https://cdn.webix.com/edge/webix.js"></script>
+  <link rel="stylesheet" href="https://cdn.webix.com/edge/webix.css">
+</head>
+<body>
+  <script>
+    webix.ready(function() {
+      webix.ui({
+        rows: [
+          { template:"<h2 style='text-align:center; margin:20px;'>Smart Retail POS Register</h2>", height:80, css:"webix_header" },
+          {
+            cols: [
+              {},
+              {
+                view: "form",
+                id: "registerForm",
+                width: 400,
+                elements: [
+                  { view: "text", label: "Name", name: "nama", required: true },
+                  { view: "text", label: "Username", name: "username", required: true },
+                  { view: "text", label: "Email", name: "email", required: true },
+                  { view: "text", type: "password", label: "Password", name: "password", required: true },
+                  { view: "combo", label: "Role", name: "role", options: ["admin", "kasir"], value: "kasir", required: true },
+                  {
+                    cols: [
+                      { view: "button", value: "Register", css: "webix_primary", click: registerUser },
+                      { view: "button", value: "Back to Login", click: function(){ window.location.href = 'login.html'; } }
+                    ]
+                  }
+                ]
+              },
+              {}
+            ]
+          }
+        ]
+      });
+    });
+
+    function registerUser() {
+      const form = $$("registerForm");
+      if (!form.validate()) return;
+      
+      const { nama, username, email, password, role } = form.getValues();
+
+      fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nama, username, email, password, role })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success || data.message === "User registered successfully") {
+          webix.message({ type: "success", text: "Registration successful!" });
+          setTimeout(() => window.location.href = "login.html", 1500);
+        } else {
+          webix.message({ type: "error", text: data.message || "Registration failed" });
+        }
+      })
+      .catch(() => {
+        webix.message({ type: "error", text: "Registration failed" });
+      });
+    }
+  </script>
+</body>
+</html>

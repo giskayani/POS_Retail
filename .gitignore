@@ -1,0 +1,6 @@
+kapita_projek/
+__pycache__/
+*.pyc
+.env
+kapita_projek/
+.DS_Store

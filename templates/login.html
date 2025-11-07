@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smart Retail POS - Login</title>
+  <script src="https://cdn.webix.com/edge/webix.js"></script>
+  <link rel="stylesheet" href="https://cdn.webix.com/edge/webix.css">
+  <script src="../assets/js/auth.js"></script>
+</head>
+<body>
+  <script>
+    webix.ready(function() {
+      webix.ui({
+        rows: [
+          { template:"<h2 style='text-align:center; margin:20px;'>Smart Retail POS</h2>", height:80, css:"webix_header" },
+          {
+            cols: [
+              {},
+              {
+                view: "form",
+                id: "loginForm",
+                width: 400,
+                elements: [
+                  { view: "text", label: "Username", name: "username", required: true },
+                  { view: "text", type: "password", label: "Password", name: "password", required: true },
+                  { 
+                    cols: [
+                      { view: "button", value: "Login", css: "webix_primary", click: doLogin },
+                      { view: "button", value: "Register", click: function(){ window.location.href = 'register.html'; } }
+                    ]
+                  }
+                ]
+              },
+              {}
+            ]
+          }
+        ]
+      });
+    });
+
+    function doLogin() {
+      const form = $$("loginForm");
+      if (!form.validate()) return;
+      
+      const { username, password } = form.getValues();
+
+      fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.token) {
+          localStorage.setItem("jwt", data.token);
+          webix.message({ type: "success", text: "Login successful!" });
+          window.location.href = "/home.html";
+        } else {
+          webix.message({ type: "error", text: data.message || "Login failed" });
+        }
+      })
+      .catch(() => {
+        webix.message({ type: "error", text: "Login failed, check username/password" });
+      });
+    }
+  </script>
+</body>
+</html>
