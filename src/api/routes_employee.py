@@ -8,17 +8,21 @@ from functools import wraps
 
 employee_bp = Blueprint("employee", __name__)
 
-@employee_bp.route("/register", methods=["POST"])
-def register_employee():
+@employee_bp.route("/", methods=["POST"])
+@token_required("admin") 
+def create_employee(current_user):
     data = request.get_json()
+
     required_fields = ["nama", "username", "email", "password", "role"]
-    
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
+    if data["role"] not in ["admin", "kasir"]:
+        return jsonify({"error": "Invalid role specified"}), 400
+
     db = get_db().db
     id_gen = IDGenerator(db)
-    
+
     existing = db.master_karyawan.find_one({
         "$or": [{"username": data["username"]}, {"email": data["email"]}]
     })
@@ -26,20 +30,21 @@ def register_employee():
         return jsonify({"error": "Username or email already exists"}), 400
 
     employee_id = id_gen.get_next_id("EMP")
-    
+
     employee = {
         "employee_id": employee_id,
-        "name": data["nama"],
-        "username": data["username"],
-        "email": data["email"],
+        "name": data["nama"].strip(), 
+        "username": data["username"].strip(), 
+        "email": data["email"].strip().lower(), 
         "password_hash": generate_password_hash(data["password"]),
-        "role": data["role"],
+        "role": data["role"], 
         "status": "active",
         "created_at": datetime.utcnow()
     }
 
     db.master_karyawan.insert_one(employee)
-    return jsonify({"message": "Employee registered successfully", "employee_id": employee_id}), 201
+    del employee["password_hash"] 
+    return jsonify(employee), 201   
 
 @employee_bp.route("/list", methods=["GET"])
 @token_required

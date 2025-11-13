@@ -5,7 +5,15 @@
   <title>Smart Retail POS - Dashboard</title>
   <script src="https://cdn.webix.com/edge/webix.js"></script>
   <link rel="stylesheet" href="https://cdn.webix.com/edge/webix.css">
-  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/auth.js"></script> 
+  <style>
+    html, body {
+      height: 100%; 
+      margin: 0;
+      padding: 0;
+      overflow: hidden; 
+    }
+  </style>
 </head>
 <body>
   <script>
@@ -26,6 +34,7 @@
               { view: "label", label: "Smart Retail POS - Admin Dashboard" },
               {},
               { view: "label", label: `Welcome, ${user.username}` },
+              { view: "button", value: "Change Password", width: 140, click: showChangePasswordForm },
               { view: "button", value: "Logout", width: 80, click: logout }
             ]
           },
@@ -38,7 +47,8 @@
                   { id: "dashboard", value: "Dashboard", icon: "wxi-columns" },
                   { id: "products", value: "Products", icon: "wxi-package" },
                   { id: "sales", value: "Sales", icon: "wxi-chart" },
-                  { id: "analytics", value: "Analytics", icon: "wxi-line-chart" }
+                  { id: "analytics", value: "Analytics", icon: "wxi-line-chart" },
+                  { id: "users", value: "User Management", icon: "wxi-user"}
                 ],
                 on: {
                   onAfterSelect: function(id) {
@@ -129,12 +139,41 @@
             view: "datatable",
             id: "productsTable",
             columns: [
-              { id: "name", header: "Name", width: 200, sort: "string" },
+              { id: "name", header: "Name", fillspace: true, sort: "string" },
               { id: "category", header: "Category", width: 150 },
               { id: "price", header: "Price", width: 100, format: webix.i18n.priceFormat },
               { id: "stock", header: "Stock", width: 80 },
               { id: "sku", header: "SKU", width: 120 },
               { id: "actions", header: "Actions", width: 150, template: "<button class='webix_button' onclick='editProduct(\"#product_id#\")'>Edit</button> <button class='webix_button webix_danger' onclick='deleteProduct(\"#product_id#\")'>Delete</button>" }
+            ],
+            autoheight: true,
+            select: true
+          }
+        ]
+      };
+    }
+
+    function getUsersContent() {
+      return {
+        rows: [
+          {
+            view: "toolbar",
+            elements: [
+              { view: "label", label: "User Management" },
+              {},
+              { view: "button", value: "Add User", css: "webix_primary", click: showAddUserForm } // <-- Mirip showAddProductForm
+            ]
+          },
+          {
+            view: "datatable",
+            id: "usersTable", 
+            columns: [
+              { id: "name", header: "Name", width: 200, sort: "string" },
+              { id: "username", header: "Username", width: 150 },
+              { id: "email", header: "Email", width: 200 },
+              { id: "role", header: "Role", width: 100 },
+              { id: "status", header: "Status", width: 80 },
+              // { id: "actions", header: "Actions", width: 150, template: "..." } // tambahkan nanti
             ],
             autoheight: true,
             select: true
@@ -166,6 +205,11 @@
           content.removeView(content.getChildViews()[0]);
           content.addView(getAnalyticsContent());
           loadAnalytics();
+          break;
+        case "users":
+          content.removeView(content.getChildViews()[0]);
+          content.addView(getUsersContent()); 
+          loadUsers(); 
           break;
       }
     }
@@ -221,6 +265,16 @@
       });
     }
 
+    function loadUsers() {
+      fetch("/api/employees/list", { 
+        headers: { "Authorization": "Bearer " + localStorage.getItem("jwt") }
+      })
+      .then(res => res.json())
+      .then(data => {
+        $$("usersTable").parse(data);
+      });
+    }
+
     function showAddProductForm() {
       webix.ui({
         view: "window",
@@ -241,6 +295,58 @@
               cols: [
                 { view: "button", value: "Save", css: "webix_primary", click: saveProduct },
                 { view: "button", value: "Cancel", click: function() { $$("productWindow").close(); } }
+              ]
+            }
+          ]
+        }
+      }).show();
+    }
+
+    function showAddUserForm() {
+      webix.ui({
+        view: "window",
+        id: "userWindow",
+        width: 400,
+        position: "center",
+        head: "Add User",
+        body: {
+          view: "form",
+          id: "userForm",
+          elements: [
+            { view: "text", name: "nama", label: "Name", required: true },
+            { view: "text", name: "username", label: "Username", required: true },
+            { view: "text", name: "email", label: "Email", required: true },
+            { view: "text", type:"password", name: "password", label: "Password", required: true },
+            { view: "combo", label: "Role", name: "role", options: ["admin", "kasir"], value: "kasir", required: true }, // <-- INI AMAN, karena hanya Admin yang melihatnya
+            {
+              cols: [
+                { view: "button", value: "Save", css: "webix_primary", click: saveUser },
+                { view: "button", value: "Cancel", click: function() { $$("userWindow").close(); } }
+              ]
+            }
+          ]
+        }
+      }).show();
+    }
+
+    function showChangePasswordForm() {
+      webix.ui({
+        view: "window",
+        id: "changePasswordWindow",
+        width: 400,
+        position: "center",
+        head: "Change My Password",
+        body: {
+          view: "form",
+          id: "changePasswordForm",
+          elements: [
+            { view: "text", type:"password", name: "current_password", label: "Current Password", required: true },
+            { view: "text", type:"password", name: "new_password", label: "New Password", required: true },
+            { view: "text", type:"password", name: "confirm_password", label: "Confirm New Password", required: true },
+            {
+              cols: [
+                { view: "button", value: "Save", css: "webix_primary", click: saveNewPassword },
+                { view: "button", value: "Cancel", click: function() { $$("changePasswordWindow").close(); } }
               ]
             }
           ]
@@ -270,6 +376,66 @@
           webix.message({ type: "success", text: "Product added successfully" });
           $$("productWindow").close();
           loadProducts();
+        }
+      });
+    }
+
+    function saveUser() {
+      const form = $$("userForm");
+      if (!form.validate()) return; 
+
+      const data = form.getValues();
+
+      fetch("/api/employee/", { 
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + localStorage.getItem("jwt")
+        },
+        body: JSON.stringify(data)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          webix.message({ type: "error", text: data.error });
+        } else {
+          webix.message({ type: "success", text: "User added successfully" });
+          $$("userWindow").close();
+          loadUsers(); // Refresh tabel
+        }
+      });
+    }
+
+    function saveNewPassword() {
+      const form = $$("changePasswordForm");
+      if (!form.validate()) return;
+
+      const data = form.getValues();
+      
+      if (data.new_password !== data.confirm_password) {
+        webix.message({ type: "error", text: "Password baru tidak cocok!" });
+        return;
+      }
+
+      fetch("/api/change-my-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + localStorage.getItem("jwt")
+        },
+        // Hanya kirim yang dibutuhkan oleh backend
+        body: JSON.stringify({
+            current_password: data.current_password,
+            new_password: data.new_password
+        })
+      })
+      .then(res => res.json().then(body => ({ status: res.status, body: body })))
+      .then(data => {
+        if (data.status === 200) {
+          webix.message({ type: "success", text: data.body.message });
+          $$("changePasswordWindow").close();
+        } else {
+          webix.message({ type: "error", text: data.body.error || "Gagal mengubah password" });
         }
       });
     }

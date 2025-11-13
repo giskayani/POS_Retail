@@ -26,10 +26,6 @@ def first():
 def login():
     return send_from_directory('templates', 'login.html')
 
-@app.route("/register.html")
-def register():
-    return send_from_directory('templates', 'register.html')
-
 @app.route("/home.html")
 def home():
     return send_from_directory('templates', 'home.html')

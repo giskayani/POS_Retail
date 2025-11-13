@@ -47,6 +47,19 @@ def get_products():
         p["_id"] = str(p["_id"])
     return jsonify(products), 200
 
+@product_bp.route("/categories", methods=["GET"])
+@require_auth(role="admin")
+def get_categories(current_user):
+    db = get_db().db
+    try:
+        categories = db.products.distinct("category")
+        
+        categories = [c for c in categories if c]
+        
+        return jsonify(categories), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @product_bp.route("/", methods=["POST"])
 @require_auth(role="admin")
 def create_product():

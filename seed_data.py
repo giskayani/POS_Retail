@@ -1,37 +1,20 @@
-"""
-Seed foundational collections, counters, and default data for Smart Retail DB.
-Safe to run multiple times (idempotent).
-"""
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash
+from datetime import datetime
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
+# TAMBAHKAN INI
+print("--- [DEBUG SEEDER] ---")
+print(f"MONGO_URI: {os.getenv('MONGO_URI')}")
+print(f"DB_NAME: {os.getenv('DB_NAME')}")
+print("-----------------------")
 
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client[os.getenv("DB_NAME")]
 
-# ---------- UTILITIES ----------
-def reset_counter_if_empty(collection_name: str, counter_id: str):
-    """Reset counter if related collection is empty."""
-    if db[collection_name].count_documents({}) == 0:
-        db.counters.update_one(
-            {"_id": counter_id},
-            {"$set": {"sequence_value": 0}},
-            upsert=True
-        )
-        print(f"Counter '{counter_id}' reset to 0 (collection empty).")
-    else:
-        # Ensure counter exists even if not reset
-        db.counters.update_one(
-            {"_id": counter_id},
-            {"$setOnInsert": {"sequence_value": 0}},
-            upsert=True
-        )
-
 def get_next_sequence(name):
-    """Generate next sequence value for given counter name."""
     counter = db.counters.find_one_and_update(
         {"_id": name},
         {"$inc": {"sequence_value": 1}},
@@ -40,28 +23,15 @@ def get_next_sequence(name):
     )
     return counter["sequence_value"]
 
-# ---------- SEED FUNCTIONS ----------
-def seed_default_collections():
-    for collection in ["products", "sales", "users", "counters"]:
+def seed_collections():
+    collections = ["master_karyawan", "products", "sales", "sessions", "counters"]
+    for collection in collections:
         if collection not in db.list_collection_names():
             db.create_collection(collection)
             print(f"Created collection: {collection}")
 
-def seed_admin_user():
-    if db.users.count_documents({"username": "admin"}) == 0:
-        admin = {
-            "user_id": f"U{get_next_sequence('user_id'):04d}",
-            "username": "admin",
-            "password_hash": generate_password_hash("admin123"),
-            "role": "admin"
-        }
-        db.users.insert_one(admin)
-        print("Admin user created.")
-    else:
-        print("Admin user already exists.")
-
 def seed_counters():
-    counters = ["product_id", "variant_id", "sale_id", "user_id"]
+    counters = ["EMP", "PRD", "TXN", "SES"]
     for c in counters:
         db.counters.update_one(
             {"_id": c},
@@ -70,46 +40,101 @@ def seed_counters():
         )
     print("Counters initialized.")
 
-def seed_sample_products():
-    if db.products.count_documents({}) == 0:
-        sample_products = [
+def seed_employees():
+    if db.master_karyawan.count_documents({"username": "admin"}) == 0:
+        employees = [
             {
-                "product_id": f"P{get_next_sequence('product_id'):04d}",
-                "name": "Kopi Tubruk Premium",
-                "price": 25000,
-                "stock": 120,
-                "variants": [
-                    {"variant_id": f"V{get_next_sequence('variant_id'):04d}", "name": "250g", "price": 25000},
-                    {"variant_id": f"V{get_next_sequence('variant_id'):04d}", "name": "500g", "price": 45000}
-                ]
+                "employee_id": f"EMP{get_next_sequence('EMP'):04d}",
+                "name": "Administrator",
+                "username": "admin",
+                "email": "admin@smartretail.com",
+                "password_hash": generate_password_hash("admin123"),
+                "role": "admin",
+                "status": "active",
+                "created_at": datetime.utcnow()
             },
             {
-                "product_id": f"P{get_next_sequence('product_id'):04d}",
-                "name": "Teh Hijau Organik",
-                "price": 20000,
-                "stock": 90,
-                "variants": [
-                    {"variant_id": f"V{get_next_sequence('variant_id'):04d}", "name": "100g", "price": 20000},
-                    {"variant_id": f"V{get_next_sequence('variant_id'):04d}", "name": "200g", "price": 35000}
-                ]
+                "employee_id": f"EMP{get_next_sequence('EMP'):04d}",
+                "name": "Kasir 1",
+                "username": "kasir1",
+                "email": "kasir1@smartretail.com",
+                "password_hash": generate_password_hash("kasir123"),
+                "role": "kasir",
+                "status": "active",
+                "created_at": datetime.utcnow()
             }
         ]
-        db.products.insert_many(sample_products)
-        print("Sample products inserted.")
+        db.master_karyawan.insert_many(employees)
+        print("Default employees created.")
+    else:
+        print("Employees already exist.")
+
+def seed_products():
+    if db.products.count_documents({}) == 0:
+        products = [
+            {
+                "product_id": f"PRD{get_next_sequence('PRD'):04d}",
+                "name": "Kopi Arabica Premium",
+                "category": "Beverages",
+                "price": 25000,
+                "stock": 50,
+                "sku": "KAP001",
+                "status": "active",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "product_id": f"PRD{get_next_sequence('PRD'):04d}",
+                "name": "Teh Hijau Organik",
+                "category": "Beverages",
+                "price": 20000,
+                "stock": 30,
+                "sku": "THO001",
+                "status": "active",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "product_id": f"PRD{get_next_sequence('PRD'):04d}",
+                "name": "Roti Bakar Coklat",
+                "category": "Food",
+                "price": 15000,
+                "stock": 25,
+                "sku": "RBC001",
+                "status": "active",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "product_id": f"PRD{get_next_sequence('PRD'):04d}",
+                "name": "Sandwich Tuna",
+                "category": "Food",
+                "price": 18000,
+                "stock": 20,
+                "sku": "ST001",
+                "status": "active",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "product_id": f"PRD{get_next_sequence('PRD'):04d}",
+                "name": "Jus Jeruk Segar",
+                "category": "Beverages",
+                "price": 12000,
+                "stock": 40,
+                "sku": "JJS001",
+                "status": "active",
+                "created_at": datetime.utcnow()
+            }
+        ]
+        db.products.insert_many(products)
+        print("Sample products created.")
     else:
         print("Products already exist.")
 
-# ---------- MAIN EXECUTION ----------
 if __name__ == "__main__":
-    seed_default_collections()
+    print("Starting database seeding...")
+    seed_collections()
     seed_counters()
-    seed_admin_user()
-    seed_sample_products()
-
-    # Reset counters only if collections are empty
-    reset_counter_if_empty("products", "product_id")
-    reset_counter_if_empty("sales", "sale_id")
-    reset_counter_if_empty("users", "user_id")
-    reset_counter_if_empty("products", "variant_id")
-
+    seed_employees()
+    seed_products()
     print("Database seeding complete.")
+    print("\nDefault login credentials:")
+    print("Admin - Username: admin, Password: admin123")
+    print("Kasir - Username: kasir1, Password: kasir123")
